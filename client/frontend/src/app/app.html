@@ -1,0 +1,73 @@
+<div class="container">
+
+  <!-- Login Card -->
+  <div *ngIf="!isLoggedIn" class="card login-card" [formGroup]="loginForm">
+    <h1 class="title">Neighborhood Board</h1>
+    <p class="subtitle">Connect with your neighbors</p>
+
+    <div class="form-group">
+      <label>Email</label>
+      <input type="text" formControlName="email" placeholder="admin@example.com">
+    </div>
+
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" formControlName="password" placeholder="admin123">
+    </div>
+
+    <button (click)="onLogin()" class="btn primary-btn">Sign In</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div *ngIf="isLoggedIn" class="dashboard">
+
+    <!-- Header -->
+    <header class="dashboard-header">
+      <div>
+        <h1>Neighborhood Feed</h1>
+        <p>Stay updated with your community</p>
+      </div>
+      <button (click)="logout()" class="btn secondary-btn">Sign Out</button>
+    </header>
+
+    <!-- Create Post -->
+    <div class="card create-post-card">
+      <h3>Share a Post</h3>
+      <input #title placeholder="Title">
+      <textarea #desc placeholder="Description"></textarea>
+      <select #catId>
+        <option *ngFor="let cat of categories" [value]="cat.category_id">{{cat.name}}</option>
+      </select>
+      <button (click)="createPost(title.value, desc.value, catId.value)" class="btn primary-btn">
+        Share
+      </button>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <button (click)="fetchPosts()" class="btn secondary-btn">All Posts</button>
+      <button *ngFor="let cat of categories" (click)="filterByCategory(cat.category_id)" class="btn secondary-btn">
+        {{ cat.name }}
+      </button>
+    </div>
+
+    <!-- Posts Grid -->
+    <div class="posts-grid">
+      <div *ngFor="let post of posts" class="card post-card">
+        <span class="category">{{ post.category_name }}</span>
+        <h3>{{ post.title }}</h3>
+        <p>{{ post.description }}</p>
+        <p *ngIf="post.price">Price: ${{ post.price }}</p>
+        <div class="post-footer">
+          <span>👤 {{ post.author_name }}</span>
+          <span>📍 {{ post.zone }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="posts.length === 0" class="no-posts">
+      <p>No posts yet. Be the first to share!</p>
+    </div>
+
+  </div>
+</div>

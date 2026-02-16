@@ -16,7 +16,7 @@ export interface Db {
 
 let db: SqlJsDatabase | null = null;
 let dbWrapper: Db | null = null;
-
+	
 function rowToObject(columns: string[], values: unknown[]): Record<string, unknown> {
   const o: Record<string, unknown> = {};
   columns.forEach((c, i) => { o[c] = values[i]; });
@@ -194,9 +194,11 @@ export async function initDb(): Promise<void> {
   };
   const originalRun = database.run.bind(database);
   database.run = function (sql: string, params?: (string | number | null)[]) {
-    originalRun(sql, params);
+    const result = originalRun(sql, params);
     saveToFile();
+    return result;
   };
+
   dbWrapper = createDbWrapper(database, saveToFile);
 
   SCHEMA.split(');')
@@ -204,7 +206,7 @@ export async function initDb(): Promise<void> {
     .filter((s) => s.startsWith('CREATE'))
     .forEach((s) => database.run(s + ');'));
 
-  const row = dbWrapper.prepare('SELECT COUNT(*) as c FROM categories').get() as { c: number };
+  const row = dbWrapper!.prepare('SELECT COUNT(*) as c FROM categories').get() as { c: number };
   if (row.c === 0) {
     database.run(`
       INSERT INTO categories (name, description) VALUES
@@ -220,10 +222,10 @@ export async function initDb(): Promise<void> {
   if (userCount.c === 0) {
     const bcrypt = require('bcryptjs');
     const hash = bcrypt.hashSync('admin123', 10);
-    dbWrapper.prepare(`
-      INSERT INTO users (email, password_hash, display_name, roles, status)
-      VALUES (?, ?, 'Administrator', 'administrator', 'active')
-    `).run('admin@example.com', hash);
+  dbWrapper!.prepare(`
+    INSERT INTO users (email, password_hash, display_name, roles, status)
+    VALUES (?, ?, 'Administrator', 'administrator', 'active')
+  `).run('admin@example.com', hash);
   }
 
 }
