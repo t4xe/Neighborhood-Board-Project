@@ -1,0 +1,14 @@
+{
+  "name": "neighborhood-community-board",
+  "version": "1.0.0",
+  "description": "Neighborhood Community Board - post news, requests, items for sale; comment and react; filter by location or category",
+  "scripts": {
+    "build": "cd server && npm run build",
+    "start": "cd server && npm start",
+    "dev": "cd server && npm run dev",
+    "install:all": "npm install && cd server && npm install"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

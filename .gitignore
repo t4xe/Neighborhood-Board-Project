@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.db
+.env
+client/dist/
+client/.angular/
+*.log
+.DS_Store
