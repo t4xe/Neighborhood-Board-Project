@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Neighborhood Community Board
 
 A full-stack neighborhood board app with **role-based authentication and authorization**. Users can register, log in, create posts, comment, and react. Admins can manage users and delete any post.
@@ -396,3 +397,6 @@ cd client/frontend && npm start
 ```
 
 For more API detail, see **docs/API.md**.
+=======
+# Neighborhood-Board-Project
+>>>>>>> 13d10d611bb4a24be81cfbfc7b5e11d9cdb2b022
