@@ -123,6 +123,7 @@
           </div>
           <div class="post-actions">
             <button (click)="viewPost(post)" class="btn secondary-btn btn-sm">View Details</button>
+            <button *ngIf="post.status === 'inactive'" (click)="reactivatePost(post)" class="btn primary-btn btn-sm">Reactivate</button>
             <button (click)="deletePost(post.post_id)" class="btn danger-btn btn-sm">Delete Post</button>
           </div>
         </div>
@@ -156,9 +157,34 @@
         </form>
       </div>
       <div class="users-list">
-        <div *ngFor="let cat of categories" class="card user-card">
-          <h4>{{ cat.name }}</h4>
-          <p *ngIf="cat.description" class="muted">{{ cat.description }}</p>
+        <div *ngFor="let cat of categories" class="card user-card category-card">
+          <div *ngIf="editingCategoryId !== cat.category_id">
+            <h4>{{ cat.name }}</h4>
+            <p *ngIf="cat.description" class="muted">{{ cat.description }}</p>
+            <p *ngIf="cat.rules" class="muted rules-preview">Rules: {{ cat.rules }}</p>
+            <div class="category-actions">
+              <button (click)="editCategory(cat)" class="btn secondary-btn btn-sm">Edit</button>
+              <button (click)="deleteCategory(cat)" class="btn danger-btn btn-sm">Delete</button>
+            </div>
+          </div>
+          <div *ngIf="editingCategoryId === cat.category_id" class="category-edit-form">
+            <form [formGroup]="categoryEditForm" (ngSubmit)="saveCategoryEdit()">
+              <div class="form-group">
+                <label>Name</label>
+                <input type="text" formControlName="name" required>
+              </div>
+              <div class="form-group">
+                <label>Description</label>
+                <input type="text" formControlName="description">
+              </div>
+              <div class="form-group">
+                <label>Rules</label>
+                <input type="text" formControlName="rules">
+              </div>
+              <button type="submit" class="btn primary-btn btn-sm">Save</button>
+              <button type="button" (click)="cancelCategoryEdit()" class="btn secondary-btn btn-sm">Cancel</button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -198,6 +224,7 @@
           <span>{{ selectedPost.author_name }}</span>
           <span>{{ selectedPost.zone }}</span>
           <span>{{ selectedPost.status }}</span>
+          <button *ngIf="selectedPost.status === 'inactive'" (click)="reactivatePost(selectedPost)" class="btn primary-btn btn-sm">Reactivate</button>
         </div>
         <h4>Comments</h4>
         <div *ngFor="let c of selectedPostComments" class="comment-row">
@@ -225,6 +252,28 @@
         <p><strong>Reason:</strong> {{ selectedReport.reason }}</p>
         <p *ngIf="selectedReport.details"><strong>Details:</strong> {{ selectedReport.details }}</p>
         <p>Status: {{ selectedReport.status }} · Reported by {{ selectedReport.reporter_name }}</p>
+        <div *ngIf="selectedReport.entity_content" class="reported-entity">
+          <h4>Reported content</h4>
+          <ng-container *ngIf="selectedReport.entity_content.kind === 'post'">
+            <p><strong>Post:</strong> {{ selectedReport.entity_content.title }}</p>
+            <p>{{ selectedReport.entity_content.description }}</p>
+            <p>Author: {{ selectedReport.entity_content.author_name }} ({{ selectedReport.entity_content.author_email }})</p>
+            <div class="report-actions-inline">
+              <button type="button" (click)="suspendReportedUser()" class="btn danger-btn btn-sm">Suspend user</button>
+            </div>
+          </ng-container>
+          <ng-container *ngIf="selectedReport.entity_content.kind === 'comment'">
+            <p><strong>Comment</strong> by {{ selectedReport.entity_content.author_name }} ({{ selectedReport.entity_content.author_email }}):</p>
+            <p class="reported-comment-body">{{ selectedReport.entity_content.body }}</p>
+            <div class="report-actions-inline">
+              <button type="button" (click)="deleteReportedComment()" class="btn danger-btn btn-sm">Delete this comment</button>
+              <button type="button" (click)="suspendReportedUser()" class="btn danger-btn btn-sm">Suspend user</button>
+            </div>
+          </ng-container>
+          <ng-container *ngIf="selectedReport.entity_content.kind === 'post'">
+            <button type="button" (click)="suspendReportedUser()" class="btn danger-btn btn-sm">Suspend reported user</button>
+          </ng-container>
+        </div>
         <h4>Audit trail</h4>
         <div *ngFor="let a of selectedReport.audit" class="audit-item">
           {{ a.action }} – {{ a.actor_name }} · {{ a.created_at | date:'short' }}
@@ -251,4 +300,5 @@
       </div>
     </div>
   </div>
+  <app-confirm-dialog></app-confirm-dialog>
 </div>

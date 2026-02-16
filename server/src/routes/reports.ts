@@ -22,11 +22,17 @@ reportsRouter.post('/', requireAuth, (req: Request & { user?: SessionUser | null
   const db = getDb();
   const eId = parseInt(String(entityId), 10);
   if (entityType === 'post') {
-    const post = db.prepare('SELECT post_id FROM posts WHERE post_id = ?').get(eId);
+    const post = db.prepare('SELECT post_id, author_id FROM posts WHERE post_id = ?').get(eId) as { post_id: number; author_id: number } | undefined;
     if (!post) return res.status(404).json({ error: 'Not Found', message: 'Post not found' });
+    if (post.author_id === user.user_id) {
+      return res.status(400).json({ error: 'Bad Request', message: 'You cannot report your own post' });
+    }
   } else {
-    const comment = db.prepare('SELECT comment_id FROM comments WHERE comment_id = ?').get(eId);
+    const comment = db.prepare('SELECT comment_id, author_id FROM comments WHERE comment_id = ?').get(eId) as { comment_id: number; author_id: number } | undefined;
     if (!comment) return res.status(404).json({ error: 'Not Found', message: 'Comment not found' });
+    if (comment.author_id === user.user_id) {
+      return res.status(400).json({ error: 'Bad Request', message: 'You cannot report your own comment' });
+    }
   }
   const now = new Date().toISOString();
   const result = db.prepare(`
@@ -77,7 +83,23 @@ reportsRouter.get('/:reportId', requireAuth, requireRole('administrator'), (req:
     WHERE a.report_id = ?
     ORDER BY a.created_at ASC
   `).all(reportId) as Record<string, unknown>[];
-  res.status(200).json({ ...row, audit });
+  const entityType = row.entity_type as string;
+  const entityId = row.entity_id as number;
+  let entity_content: Record<string, unknown> = {};
+  if (entityType === 'post') {
+    const post = db.prepare(`
+      SELECT p.post_id, p.title, p.description, p.author_id, u.display_name as author_name, u.email as author_email
+      FROM posts p JOIN users u ON u.user_id = p.author_id WHERE p.post_id = ?
+    `).get(entityId) as Record<string, unknown> | undefined;
+    if (post) entity_content = { kind: 'post', ...post };
+  } else if (entityType === 'comment') {
+    const comment = db.prepare(`
+      SELECT c.comment_id, c.body, c.author_id, c.post_id, u.display_name as author_name, u.email as author_email
+      FROM comments c JOIN users u ON u.user_id = c.author_id WHERE c.comment_id = ?
+    `).get(entityId) as Record<string, unknown> | undefined;
+    if (comment) entity_content = { kind: 'comment', ...comment };
+  }
+  res.status(200).json({ ...row, audit, entity_content });
 });
 
 reportsRouter.patch('/:reportId/status', requireAuth, requireRole('administrator'), (req: Request & { user?: SessionUser | null }, res: Response) => {

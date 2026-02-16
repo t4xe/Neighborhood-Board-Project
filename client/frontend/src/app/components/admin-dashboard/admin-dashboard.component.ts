@@ -5,6 +5,8 @@ import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
 import { AuthService, User } from '../../services/auth.service';
 import { LiveService } from '../../services/live.service';
+import { ConfirmService } from '../../services/confirm.service';
+import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 
 interface Post {
   post_id: number;
@@ -42,8 +44,27 @@ interface Category {
   category_id: number;
   name: string;
   description?: string;
+  rules?: string;
 }
 
+interface EntityContentPost {
+  kind: 'post';
+  post_id: number;
+  title: string;
+  description: string;
+  author_id: number;
+  author_name: string;
+  author_email: string;
+}
+interface EntityContentComment {
+  kind: 'comment';
+  comment_id: number;
+  body: string;
+  author_id: number;
+  author_name: string;
+  author_email: string;
+  post_id: number;
+}
 interface Report {
   report_id: number;
   reporter_id: number;
@@ -55,6 +76,7 @@ interface Report {
   reporter_name: string;
   created_at: string;
   audit?: { action: string; actor_name: string; created_at: string; details: string }[];
+  entity_content?: EntityContentPost | EntityContentComment;
 }
 
 interface UserListItem {
@@ -70,7 +92,7 @@ interface UserListItem {
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, ConfirmDialogComponent],
   templateUrl: './admin-dashboard.component.html',
   styleUrls: ['./admin-dashboard.component.css']
 })
@@ -89,8 +111,10 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   showUserEdit = false;
   showAddCategory = false;
   showReportDetail = false;
+  editingCategoryId: number | null = null;
   userEditForm: FormGroup;
   categoryForm: FormGroup;
+  categoryEditForm: FormGroup;
   reportStatusForm: FormGroup;
   errorMessage = '';
   successMessage = '';
@@ -99,7 +123,8 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   constructor(
     private authService: AuthService,
     private http: HttpClient,
-    private liveService: LiveService
+    private liveService: LiveService,
+    private confirmService: ConfirmService
   ) {
     this.userEditForm = new FormGroup({
       displayName: new FormControl('', [Validators.required]),
@@ -108,6 +133,11 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       zone: new FormControl('')
     });
     this.categoryForm = new FormGroup({
+      name: new FormControl('', [Validators.required]),
+      description: new FormControl(''),
+      rules: new FormControl('')
+    });
+    this.categoryEditForm = new FormGroup({
       name: new FormControl('', [Validators.required]),
       description: new FormControl(''),
       rules: new FormControl('')
@@ -197,9 +227,12 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   }
 
   deleteComment(postId: number, commentId: number): void {
-    this.http.delete(`/api/posts/${postId}/comments/${commentId}`, { headers: this.getAuthHeaders() }).subscribe({
-      next: () => { this.showSuccess('Comment deleted'); this.viewPost(this.selectedPost!); },
-      error: (e) => this.showError(e.error?.message || 'Failed to delete comment')
+    this.confirmService.show({ title: 'Delete comment', message: 'Delete this comment?', confirmText: 'Delete', danger: true }).then((ok) => {
+      if (!ok) return;
+      this.http.delete(`/api/posts/${postId}/comments/${commentId}`, { headers: this.getAuthHeaders() }).subscribe({
+        next: () => { this.showSuccess('Comment deleted'); this.viewPost(this.selectedPost!); },
+        error: (e) => this.showError(e.error?.message || 'Failed to delete comment')
+      });
     });
   }
 
@@ -219,10 +252,70 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  editCategory(cat: Category): void {
+    this.editingCategoryId = cat.category_id;
+    this.categoryEditForm.patchValue({ name: cat.name, description: cat.description || '', rules: cat.rules || '' });
+  }
+
+  cancelCategoryEdit(): void {
+    this.editingCategoryId = null;
+  }
+
+  saveCategoryEdit(): void {
+    if (!this.categoryEditForm.valid || this.editingCategoryId == null) return;
+    const v = this.categoryEditForm.value;
+    this.http.put(`/api/categories/${this.editingCategoryId}`, { name: v.name, description: v.description, rules: v.rules }, { headers: this.getAuthHeaders() }).subscribe({
+      next: () => { this.showSuccess('Category updated'); this.editingCategoryId = null; this.fetchCategories(); },
+      error: (e) => this.showError(e.error?.message || 'Failed to update category')
+    });
+  }
+
+  deleteCategory(cat: Category): void {
+    this.confirmService.show({ title: 'Delete category', message: `Delete category "${cat.name}"? This will fail if any posts use it.`, confirmText: 'Delete', danger: true }).then((ok) => {
+      if (!ok) return;
+      this.http.delete(`/api/categories/${cat.category_id}`, { headers: this.getAuthHeaders() }).subscribe({
+        next: () => { this.showSuccess('Category deleted'); this.editingCategoryId = null; this.fetchCategories(); },
+        error: (e) => this.showError(e.error?.message || 'Failed to delete category')
+      });
+    });
+  }
+
   viewReport(reportId: number): void {
-    this.http.get<Report & { audit: Report['audit'] }>(`/api/reports/${reportId}`, { headers: this.getAuthHeaders() }).subscribe({
+    this.http.get<Report & { audit: Report['audit']; entity_content?: Report['entity_content'] }>(`/api/reports/${reportId}`, { headers: this.getAuthHeaders() }).subscribe({
       next: (data) => { this.selectedReport = data; this.showReportDetail = true; this.reportStatusForm.patchValue({ status: data.status }); },
       error: () => this.showError('Failed to load report')
+    });
+  }
+
+  deleteReportedComment(): void {
+    if (!this.selectedReport?.entity_content || (this.selectedReport.entity_content as EntityContentComment).kind !== 'comment') return;
+    const ec = this.selectedReport.entity_content as EntityContentComment;
+    this.confirmService.show({ title: 'Delete comment', message: 'Delete this reported comment?', confirmText: 'Delete', danger: true }).then((ok) => {
+      if (!ok) return;
+      this.http.delete(`/api/posts/${ec.post_id}/comments/${ec.comment_id}`, { headers: this.getAuthHeaders() }).subscribe({
+        next: () => { this.showSuccess('Comment deleted'); this.updateReportStatus(); this.closeReportDetail(); this.fetchReports(); },
+        error: (e) => this.showError(e.error?.message || 'Failed to delete comment')
+      });
+    });
+  }
+
+  suspendReportedUser(): void {
+    const ec = this.selectedReport?.entity_content as EntityContentPost | EntityContentComment | undefined;
+    if (!ec || !('author_id' in ec)) return;
+    const authorId = ec.author_id;
+    this.confirmService.show({ title: 'Suspend user', message: 'Suspend this user?', confirmText: 'Suspend', danger: true }).then((ok) => {
+      if (!ok) return;
+      this.http.put(`/api/users/${authorId}`, { status: 'suspended' }, { headers: this.getAuthHeaders() }).subscribe({
+        next: () => { this.showSuccess('User suspended'); this.fetchUsers(); },
+        error: (e) => this.showError(e.error?.message || 'Failed to suspend user')
+      });
+    });
+  }
+
+  reactivatePost(post: Post): void {
+    this.http.patch(`/api/posts/${post.post_id}/active`, {}, { headers: this.getAuthHeaders() }).subscribe({
+      next: () => { this.showSuccess('Post reactivated'); this.fetchPosts(); if (this.selectedPost?.post_id === post.post_id) this.viewPost(post); },
+      error: (e) => this.showError(e.error?.message || 'Failed to reactivate')
     });
   }
 
@@ -234,8 +327,8 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   updateReportStatus(): void {
     if (!this.reportStatusForm.valid || !this.selectedReport) return;
     const v = this.reportStatusForm.value;
-    this.http.patch(`/api/reports/${this.selectedReport.report_id}/status`, { status: v.status, action: v.action, details: v.details }, { headers: this.getAuthHeaders() }).subscribe({
-      next: (data: Report & { audit: Report['audit'] }) => { this.selectedReport = data; this.showSuccess('Report updated'); this.fetchReports(); },
+    this.http.patch<Report & { audit: Report['audit'] }>(`/api/reports/${this.selectedReport.report_id}/status`, { status: v.status, action: v.action, details: v.details }, { headers: this.getAuthHeaders() }).subscribe({
+      next: (data) => { this.selectedReport = data; this.showSuccess('Report updated'); this.fetchReports(); },
       error: (e) => this.showError(e.error?.message || 'Failed to update report')
     });
   }
@@ -281,35 +374,23 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   }
 
   deleteUser(userId: number): void {
-    if (confirm('Are you sure you want to delete this user?')) {
-      this.http.delete(`/api/users/${userId}`, {
-        headers: this.getAuthHeaders()
-      }).subscribe({
-        next: () => {
-          this.showSuccess('User deleted successfully!');
-          this.fetchUsers();
-        },
-        error: (err) => {
-          this.showError(err.error?.message || 'Failed to delete user');
-        }
+    this.confirmService.show({ title: 'Delete user', message: 'Are you sure you want to delete this user?', confirmText: 'Delete', danger: true }).then((ok) => {
+      if (!ok) return;
+      this.http.delete(`/api/users/${userId}`, { headers: this.getAuthHeaders() }).subscribe({
+        next: () => { this.showSuccess('User deleted successfully!'); this.fetchUsers(); },
+        error: (err) => this.showError(err.error?.message || 'Failed to delete user')
       });
-    }
+    });
   }
 
   deletePost(postId: number): void {
-    if (confirm('Are you sure you want to delete this post?')) {
-      this.http.delete(`/api/posts/${postId}`, {
-        headers: this.getAuthHeaders()
-      }).subscribe({
-        next: () => {
-          this.showSuccess('Post deleted successfully!');
-          this.fetchPosts();
-        },
-        error: (err) => {
-          this.showError(err.error?.message || 'Failed to delete post');
-        }
+    this.confirmService.show({ title: 'Delete post', message: 'Are you sure you want to delete this post?', confirmText: 'Delete', danger: true }).then((ok) => {
+      if (!ok) return;
+      this.http.delete(`/api/posts/${postId}`, { headers: this.getAuthHeaders() }).subscribe({
+        next: () => { this.showSuccess('Post deleted successfully!'); this.fetchPosts(); },
+        error: (err) => this.showError(err.error?.message || 'Failed to delete post')
       });
-    }
+    });
   }
 
   logout(): void {

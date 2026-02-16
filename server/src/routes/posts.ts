@@ -63,21 +63,33 @@ postsRouter.get('/', authMiddleware, (req: Request & { user?: SessionUser | null
 
   const postIds = rows.map((r) => r.post_id);
   let reactionsByPost: Record<number, unknown[]> = {};
-  if (req.user && postIds.length > 0) {
+  let reactionCountsByPost: Record<number, Record<string, number>> = {};
+  if (postIds.length > 0) {
     const placeholders = postIds.map(() => '?').join(',');
-    const reactions = db.prepare(`
-      SELECT post_id, type FROM reactions WHERE post_id IN (${placeholders}) AND author_id = ?
-    `).all(...postIds, req.user.user_id) as { post_id: number; type: string }[];
-    reactionsByPost = reactions.reduce((acc, r) => {
-      if (!acc[r.post_id]) acc[r.post_id] = [];
-      acc[r.post_id].push(r.type);
+    const allReactions = db.prepare(`
+      SELECT post_id, type FROM reactions WHERE post_id IN (${placeholders})
+    `).all(...postIds) as { post_id: number; type: string }[];
+    reactionCountsByPost = allReactions.reduce((acc, r) => {
+      if (!acc[r.post_id]) acc[r.post_id] = {};
+      acc[r.post_id][r.type] = (acc[r.post_id][r.type] || 0) + 1;
       return acc;
-    }, {} as Record<number, unknown[]>);
+    }, {} as Record<number, Record<string, number>>);
+    if (req.user) {
+      const myReactionsList = db.prepare(`
+        SELECT post_id, type FROM reactions WHERE post_id IN (${placeholders}) AND author_id = ?
+      `).all(...postIds, req.user.user_id) as { post_id: number; type: string }[];
+      reactionsByPost = myReactionsList.reduce((acc, r) => {
+        if (!acc[r.post_id]) acc[r.post_id] = [];
+        acc[r.post_id].push(r.type);
+        return acc;
+      }, {} as Record<number, unknown[]>);
+    }
   }
 
   const items = rows.map((r) => ({
     ...r,
     myReactions: reactionsByPost[r.post_id as number] || [],
+    reactionCounts: reactionCountsByPost[r.post_id as number] || {},
   }));
 
   res.status(200).json({ content: items, total, page, size });
@@ -188,13 +200,17 @@ postsRouter.get('/:postId', authMiddleware, (req: Request & { user?: SessionUser
     JOIN users u ON u.user_id = r.author_id
     WHERE r.post_id = ?
   `).all(postId) as Record<string, unknown>[];
+  const reactionCounts = (reactions as { type: string }[]).reduce((acc: Record<string, number>, r) => {
+    acc[r.type] = (acc[r.type] || 0) + 1;
+    return acc;
+  }, {});
   let myReactions: unknown[] = [];
   if (req.user) {
     const mine = db.prepare('SELECT type FROM reactions WHERE post_id = ? AND author_id = ?')
       .all(postId, req.user.user_id) as { type: string }[];
     myReactions = mine.map((m) => m.type);
   }
-  res.status(200).json({ ...row, comments, reactions, myReactions });
+  res.status(200).json({ ...row, comments, reactions, reactionCounts, myReactions });
 });
 
 postsRouter.put('/:postId', requireAuth, (req: Request & { user?: SessionUser | null }, res: Response) => {
@@ -239,7 +255,7 @@ postsRouter.put('/:postId', requireAuth, (req: Request & { user?: SessionUser | 
     if (isAdmin) {
       updates.push('status = ?');
       values.push(status);
-    } else if (isOwner && (status === 'inactive' || status === 'resolved')) {
+    } else if (isOwner && (status === 'inactive' || status === 'resolved' || status === 'active')) {
       updates.push('status = ?');
       values.push(status);
     }
@@ -278,6 +294,29 @@ postsRouter.patch('/:postId/inactive', requireAuth, (req: Request & { user?: Ses
   db.prepare("UPDATE posts SET status = 'inactive', updated_at = datetime('now') WHERE post_id = ?").run(postId);
   broadcast('posts:changed');
   res.status(200).json({ message: 'Post marked inactive' });
+});
+
+postsRouter.patch('/:postId/active', requireAuth, (req: Request & { user?: SessionUser | null }, res: Response) => {
+  const user = req.user!;
+  const postId = parseInt(req.params.postId, 10);
+  if (isNaN(postId)) {
+    return res.status(400).json({ error: 'Bad Request', message: 'Invalid post ID' });
+  }
+  const db = getDb();
+  const post = db.prepare('SELECT author_id, status FROM posts WHERE post_id = ?').get(postId) as { author_id: number; status: string } | undefined;
+  if (!post) {
+    return res.status(404).json({ error: 'Not Found', message: 'Post not found' });
+  }
+  const isAdmin = user.roleList.includes('administrator');
+  if (post.author_id !== user.user_id && !isAdmin) {
+    return res.status(403).json({ error: 'Forbidden', message: 'Only the post owner or admin can reactivate' });
+  }
+  if (post.status !== 'inactive') {
+    return res.status(400).json({ error: 'Bad Request', message: 'Post is not inactive' });
+  }
+  db.prepare("UPDATE posts SET status = 'active', updated_at = datetime('now') WHERE post_id = ?").run(postId);
+  broadcast('posts:changed');
+  res.status(200).json({ message: 'Post reactivated' });
 });
 
 postsRouter.delete('/:postId', requireAuth, requireRole('administrator'), (req: Request & { user?: SessionUser | null }, res: Response) => {
@@ -324,16 +363,46 @@ postsRouter.post('/:postId/comments', requireAuth, (req: Request & { user?: Sess
   res.status(201).json(row);
 });
 
-postsRouter.delete('/:postId/comments/:commentId', requireAuth, requireRole('administrator'), (req: Request & { user?: SessionUser | null }, res: Response) => {
+postsRouter.put('/:postId/comments/:commentId', requireAuth, (req: Request & { user?: SessionUser | null }, res: Response) => {
+  const user = req.user!;
+  const postId = parseInt(req.params.postId, 10);
+  const commentId = parseInt(req.params.commentId, 10);
+  const { body } = req.body;
+  if (isNaN(postId) || isNaN(commentId) || !body || typeof body !== 'string') {
+    return res.status(400).json({ error: 'Bad Request', message: 'Post ID, comment ID and body are required' });
+  }
+  const db = getDb();
+  const comment = db.prepare('SELECT comment_id, author_id FROM comments WHERE comment_id = ? AND post_id = ?').get(commentId, postId) as { comment_id: number; author_id: number } | undefined;
+  if (!comment) {
+    return res.status(404).json({ error: 'Not Found', message: 'Comment not found' });
+  }
+  if (comment.author_id !== user.user_id && !user.roleList.includes('administrator')) {
+    return res.status(403).json({ error: 'Forbidden', message: 'Only the comment author or admin can edit' });
+  }
+  const now = new Date().toISOString();
+  db.prepare('UPDATE comments SET body = ?, edited_at = ? WHERE comment_id = ?').run(body.trim().slice(0, 2000), now, commentId);
+  broadcast('posts:changed');
+  const row = db.prepare(`
+    SELECT c.comment_id, c.post_id, c.author_id, c.body, c.created_at, c.edited_at, u.display_name as author_name
+    FROM comments c JOIN users u ON u.user_id = c.author_id WHERE c.comment_id = ?
+  `).get(commentId) as Record<string, unknown>;
+  res.status(200).json(row);
+});
+
+postsRouter.delete('/:postId/comments/:commentId', requireAuth, (req: Request & { user?: SessionUser | null }, res: Response) => {
+  const user = req.user!;
   const postId = parseInt(req.params.postId, 10);
   const commentId = parseInt(req.params.commentId, 10);
   if (isNaN(postId) || isNaN(commentId)) {
     return res.status(400).json({ error: 'Bad Request', message: 'Invalid IDs' });
   }
   const db = getDb();
-  const comment = db.prepare('SELECT comment_id FROM comments WHERE comment_id = ? AND post_id = ?').get(commentId, postId);
+  const comment = db.prepare('SELECT comment_id, author_id FROM comments WHERE comment_id = ? AND post_id = ?').get(commentId, postId) as { comment_id: number; author_id: number } | undefined;
   if (!comment) {
     return res.status(404).json({ error: 'Not Found', message: 'Comment not found' });
+  }
+  if (comment.author_id !== user.user_id && !user.roleList.includes('administrator')) {
+    return res.status(403).json({ error: 'Forbidden', message: 'Only the comment author or admin can delete' });
   }
   db.prepare('DELETE FROM comments WHERE comment_id = ?').run(commentId);
   broadcast('posts:changed');

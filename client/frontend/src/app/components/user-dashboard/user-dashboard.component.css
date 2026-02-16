@@ -129,9 +129,56 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 .filter-bar .btn.active { background: #667eea; color: white; }
+
+.view-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.view-toggle .btn.active { background: #667eea; color: white; }
+
+.posts-container.posts-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.posts-container.posts-feed .post-card {
+  max-width: 100%;
+}
+
+.post-card {
+  position: relative;
+}
+.hover-reactions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  background: white;
+  padding: 6px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.hover-reactions .btn-sm { padding: 4px 10px; font-size: 12px; }
+.category-rules {
+  margin-top: 8px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #555;
+}
+.badge.inactive-badge { background: #999; color: white; margin-left: 8px; }
+.comment-actions { display: flex; gap: 8px; margin-top: 8px; }
+.comment-edit textarea { width: 100%; padding: 8px; border-radius: 6px; margin-bottom: 8px; }
+.danger-btn { background: #ef4444; color: white; }
+.danger-btn:hover { background: #dc2626; }
+.reaction-counts { margin-bottom: 8px; }
 .post-owner-actions { display: flex; gap: 8px; margin-bottom: 16px; }
 .edit-post-card { margin-bottom: 20px; }
 .edit-post-card h3 { margin-top: 0; }

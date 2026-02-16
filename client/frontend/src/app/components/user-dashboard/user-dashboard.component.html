@@ -33,6 +33,9 @@
           <option value="">Select a category</option>
           <option *ngFor="let cat of categories" [value]="cat.category_id">{{ cat.name }}</option>
         </select>
+        <div *ngIf="selectedCategoryRules" class="category-rules">
+          <strong>Category rules:</strong> {{ selectedCategoryRules }}
+        </div>
       </div>
       <div class="form-group">
         <label>Zone</label>
@@ -61,10 +64,15 @@
       <button (click)="filterByCategory(null)" class="btn secondary-btn" [class.active]="selectedCategoryId === null">All</button>
       <button *ngFor="let cat of categories" (click)="filterByCategory(cat.category_id)" class="btn secondary-btn" [class.active]="selectedCategoryId === cat.category_id">{{ cat.name }}</button>
     </div>
+    <div class="view-toggle">
+      <button class="btn secondary-btn" [class.active]="viewMode === 'grid'" (click)="setViewMode('grid')">Grid</button>
+      <button class="btn secondary-btn" [class.active]="viewMode === 'feed'" (click)="setViewMode('feed')">Feed</button>
+    </div>
 
-    <div class="posts-grid">
-      <div *ngFor="let post of posts" class="card post-card" (click)="viewPost(post)">
+    <div [class.posts-grid]="viewMode === 'grid'" [class.posts-feed]="viewMode === 'feed'" class="posts-container">
+      <div *ngFor="let post of posts" class="card post-card" (click)="viewPost(post)" (mouseenter)="hoverPostId = post.post_id" (mouseleave)="hoverPostId = null">
         <span class="category">{{ post.category_name }}</span>
+        <span *ngIf="post.status === 'inactive'" class="badge inactive-badge">Inactive</span>
         <h3>{{ post.title }}</h3>
         <p>{{ post.description }}</p>
         <p *ngIf="post.price" class="price">${{ post.price }}</p>
@@ -73,7 +81,12 @@
           <span>📍 {{ post.zone }}</span>
         </div>
         <div class="reactions-preview">
-          <span *ngFor="let reaction of post.myReactions" class="reaction-badge">{{ reaction }}</span>
+          <ng-container *ngFor="let r of reactionTypes">
+            <span *ngIf="post.reactionCounts && post.reactionCounts[r.value]" class="reaction-badge">{{ r.label }} ({{ (post.reactionCounts ?? {})[r.value] }})</span>
+          </ng-container>
+        </div>
+        <div *ngIf="hoverPostId === post.post_id" class="hover-reactions" (click)="$event.stopPropagation()">
+          <button *ngFor="let r of reactionTypes" type="button" class="btn reaction-btn btn-sm" [class.active]="post.myReactions.includes(r.value)" (click)="reactOnCard(post, r.value, $event)">{{ r.label }}</button>
         </div>
       </div>
     </div>
@@ -127,7 +140,8 @@
         <p class="post-description">{{ selectedPost.description }}</p>
         <div *ngIf="isOwnPost(selectedPost)" class="post-owner-actions">
           <button (click)="openEditPost(selectedPost); closePostView()" class="btn secondary-btn">Edit Post</button>
-          <button (click)="markInactive(selectedPost)" class="btn secondary-btn">Mark Inactive</button>
+          <button *ngIf="selectedPost.status !== 'inactive'" (click)="markInactive(selectedPost)" class="btn secondary-btn">Mark Inactive</button>
+          <button *ngIf="selectedPost.status === 'inactive'" (click)="reactivatePost(selectedPost)" class="btn primary-btn">Reactivate</button>
         </div>
         <div *ngIf="!isOwnPost(selectedPost)" class="post-owner-actions">
           <button (click)="openFlagModal('post', selectedPost.post_id)" class="btn secondary-btn">Flag Post</button>
@@ -135,13 +149,19 @@
 
         <!-- Reactions -->
         <div class="reactions-section">
+          <h4>Reactions</h4>
+          <div class="reaction-counts" *ngIf="selectedPost.reactionCounts && (selectedPost.reactionCounts['helpful'] || selectedPost.reactionCounts['interested'] || selectedPost.reactionCounts['congratulations'] || selectedPost.reactionCounts['sold'])">
+            <ng-container *ngFor="let r of reactionTypes">
+              <span *ngIf="selectedPost.reactionCounts && selectedPost.reactionCounts[r.value]" class="reaction-badge">{{ r.label }} ({{ (selectedPost.reactionCounts ?? {})[r.value] }})</span>
+            </ng-container>
+          </div>
           <h4>React:</h4>
           <div class="reaction-buttons">
             <button 
               *ngFor="let reaction of reactionTypes" 
               (click)="reactToPost(selectedPost, reaction.value)"
               class="btn reaction-btn"
-              [class.active]="selectedPost.myReactions?.includes(reaction.value)">
+              [class.active]="selectedPost.myReactions.includes(reaction.value)">
               {{ reaction.label }}
             </button>
           </div>
@@ -156,16 +176,31 @@
           </form>
           <div class="comments-list">
             <div *ngFor="let comment of postComments" class="comment-item">
-              <div class="comment-author">{{ comment.author_name }}</div>
-              <div class="comment-body">{{ comment.body }}</div>
-              <div class="comment-time">{{ comment.created_at | date:'short' }}</div>
-              <button (click)="openFlagModal('comment', comment.comment_id)" class="btn secondary-btn btn-sm">Flag</button>
+              <ng-container *ngIf="editingComment?.comment_id !== comment.comment_id">
+                <div class="comment-author">{{ comment.author_name }}</div>
+                <div class="comment-body">{{ comment.body }}</div>
+                <div class="comment-time">{{ comment.created_at | date:'short' }}</div>
+                <div class="comment-actions">
+                  <button *ngIf="isOwnComment(comment)" (click)="openEditComment(comment)" class="btn secondary-btn btn-sm">Edit</button>
+                  <button *ngIf="isOwnComment(comment)" (click)="deleteComment(comment)" class="btn danger-btn btn-sm">Delete</button>
+                  <button *ngIf="!isOwnComment(comment)" (click)="openFlagModal('comment', comment.comment_id)" class="btn secondary-btn btn-sm">Flag</button>
+                </div>
+              </ng-container>
+              <div *ngIf="editingComment?.comment_id === comment.comment_id" class="comment-edit">
+                <form [formGroup]="commentEditForm" (ngSubmit)="saveEditComment()">
+                  <textarea formControlName="body" rows="2"></textarea>
+                  <button type="submit" class="btn primary-btn btn-sm">Save</button>
+                  <button type="button" (click)="cancelEditComment()" class="btn secondary-btn btn-sm">Cancel</button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <app-confirm-dialog></app-confirm-dialog>
 
   <!-- Flag / Report Modal -->
   <div *ngIf="showFlagModal" class="modal-overlay" (click)="closeFlagModal()">
