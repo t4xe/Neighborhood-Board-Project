@@ -166,6 +166,30 @@ const SCHEMA = `
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (actor_id) REFERENCES users(user_id)
     );
+
+    CREATE TABLE IF NOT EXISTS moderation_reports (
+      report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reporter_id INTEGER NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      details TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (reporter_id) REFERENCES users(user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS report_audit (
+      audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      report_id INTEGER NOT NULL,
+      actor_id INTEGER,
+      action TEXT NOT NULL,
+      details TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (report_id) REFERENCES moderation_reports(report_id),
+      FOREIGN KEY (actor_id) REFERENCES users(user_id)
+    );
 `;
 
 export async function initDb(): Promise<void> {
@@ -221,7 +245,7 @@ export async function initDb(): Promise<void> {
   const userCount = dbWrapper.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number };
   if (userCount.c === 0) {
     const bcrypt = require('bcryptjs');
-    const hash = bcrypt.hashSync('admin123', 10);
+    const hash = bcrypt.hashSync('admin123', 8);
   dbWrapper!.prepare(`
     INSERT INTO users (email, password_hash, display_name, roles, status)
     VALUES (?, ?, 'Administrator', 'administrator', 'active')

@@ -7,9 +7,13 @@ Backend is implemented; frontend is the teammate’s task. This document describ
 
 ## Authentication
 
+- **POST /api/authentication/register**  
+  Body: `{ "email": string, "password": string, "displayName": string }`  
+  Returns: `201` with `{ "message": "Registration successful", "user_id": number }`. Creates a user with role `user` (stored as `regular`). Password is hashed before storing.
+
 - **POST /api/authentication/login**  
   Body: `{ "email": string, "password": string }`  
-  Returns: `{ "token": string, "user": { user_id, email, display_name, roles, types, zone, status, roleList, typeList } }`  
+  Returns: `{ "token": string, "user": { user_id, email, display_name, roles, types, zone, status, roleList, typeList, isAdmin } }`  
   Demo: `admin@example.com` / `admin123`
 
 - **POST /api/authentication/logout**  
@@ -18,7 +22,19 @@ Backend is implemented; frontend is the teammate’s task. This document describ
 ## Users
 
 - **GET /api/users/me**  
-  Requires auth. Returns current user profile and roleList, typeList.
+  Requires auth. Returns current user profile, roleList, typeList, isAdmin.
+
+- **PUT /api/users/me**  
+  Requires auth. Body: `{ displayName?, password?, zone? }`. Update own profile (password min 6 chars).
+
+- **GET /api/users**  
+  Requires auth, **admin** only. Returns list of all users (user_id, email, display_name, roles, status, isAdmin, etc.).
+
+- **PUT /api/users/:userId**  
+  Requires auth, **admin** only. Body: `{ displayName?, roles?, status?, zone? }`. Update any user.
+
+- **DELETE /api/users/:userId**  
+  Requires auth, **admin** only. Soft-deletes user (sets status to `deleted`).
 
 ## Categories
 

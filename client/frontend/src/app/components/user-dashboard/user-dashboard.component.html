@@ -1,0 +1,193 @@
+<div class="user-dashboard">
+  <!-- Header -->
+  <header class="dashboard-header">
+    <div>
+      <h1>Neighborhood Feed</h1>
+      <p>Welcome, {{ currentUser?.display_name }}!</p>
+    </div>
+    <div class="header-actions">
+      <a routerLink="/user-dashboard/profile" class="btn secondary-btn">Profile</a>
+      <button (click)="logout()" class="btn secondary-btn">Logout</button>
+    </div>
+  </header>
+
+  <!-- Messages -->
+  <div *ngIf="errorMessage" class="alert alert-error">{{ errorMessage }}</div>
+  <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
+
+  <!-- Create Post Section -->
+  <div *ngIf="showCreatePost" class="card create-post-card">
+    <h3>Create New Post</h3>
+    <form [formGroup]="createPostForm" (ngSubmit)="createPost()">
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" formControlName="title" required>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea formControlName="description" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select formControlName="categoryId" required>
+          <option value="">Select a category</option>
+          <option *ngFor="let cat of categories" [value]="cat.category_id">{{ cat.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Zone</label>
+        <input type="text" formControlName="zone" placeholder="e.g., Downtown" required>
+      </div>
+      <div class="form-group">
+        <label>Price (optional)</label>
+        <input type="number" formControlName="price" placeholder="0.00" step="0.01">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary-btn">Create Post</button>
+        <button type="button" (click)="showCreatePost = false" class="btn secondary-btn">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Post Feed -->
+  <div class="feed-section">
+    <div class="feed-header">
+      <h2>Community Posts</h2>
+      <button (click)="showCreatePost = !showCreatePost" class="btn primary-btn">
+        {{ showCreatePost ? 'Cancel' : '+ New Post' }}
+      </button>
+    </div>
+    <div class="filter-bar">
+      <button (click)="filterByCategory(null)" class="btn secondary-btn" [class.active]="selectedCategoryId === null">All</button>
+      <button *ngFor="let cat of categories" (click)="filterByCategory(cat.category_id)" class="btn secondary-btn" [class.active]="selectedCategoryId === cat.category_id">{{ cat.name }}</button>
+    </div>
+
+    <div class="posts-grid">
+      <div *ngFor="let post of posts" class="card post-card" (click)="viewPost(post)">
+        <span class="category">{{ post.category_name }}</span>
+        <h3>{{ post.title }}</h3>
+        <p>{{ post.description }}</p>
+        <p *ngIf="post.price" class="price">${{ post.price }}</p>
+        <div class="post-footer">
+          <span>👤 {{ post.author_name }}</span>
+          <span>📍 {{ post.zone }}</span>
+        </div>
+        <div class="reactions-preview">
+          <span *ngFor="let reaction of post.myReactions" class="reaction-badge">{{ reaction }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="posts.length === 0" class="no-posts">
+      <p>No posts yet. Be the first to share!</p>
+    </div>
+  </div>
+
+  <!-- Edit Post Form (inline when viewing own post) -->
+  <div *ngIf="showEditPost && editingPost" class="card edit-post-card">
+    <h3>Edit Post</h3>
+    <form [formGroup]="editPostForm" (ngSubmit)="saveEditPost()">
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" formControlName="title" required>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea formControlName="description" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Zone</label>
+        <input type="text" formControlName="zone" required>
+      </div>
+      <div class="form-group">
+        <label>Price (optional)</label>
+        <input type="number" formControlName="price" step="0.01">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary-btn">Save</button>
+        <button type="button" (click)="cancelEditPost()" class="btn secondary-btn">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Post Detail Modal -->
+  <div *ngIf="selectedPost" class="modal-overlay" (click)="closePostView()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>{{ selectedPost.title }}</h2>
+        <button (click)="closePostView()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="post-meta">
+          <span class="category">{{ selectedPost.category_name }}</span>
+          <span>👤 {{ selectedPost.author_name }}</span>
+          <span>📍 {{ selectedPost.zone }}</span>
+          <span *ngIf="selectedPost.price">💰 ${{ selectedPost.price }}</span>
+        </div>
+        <p class="post-description">{{ selectedPost.description }}</p>
+        <div *ngIf="isOwnPost(selectedPost)" class="post-owner-actions">
+          <button (click)="openEditPost(selectedPost); closePostView()" class="btn secondary-btn">Edit Post</button>
+          <button (click)="markInactive(selectedPost)" class="btn secondary-btn">Mark Inactive</button>
+        </div>
+        <div *ngIf="!isOwnPost(selectedPost)" class="post-owner-actions">
+          <button (click)="openFlagModal('post', selectedPost.post_id)" class="btn secondary-btn">Flag Post</button>
+        </div>
+
+        <!-- Reactions -->
+        <div class="reactions-section">
+          <h4>React:</h4>
+          <div class="reaction-buttons">
+            <button 
+              *ngFor="let reaction of reactionTypes" 
+              (click)="reactToPost(selectedPost, reaction.value)"
+              class="btn reaction-btn"
+              [class.active]="selectedPost.myReactions?.includes(reaction.value)">
+              {{ reaction.label }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Comments -->
+        <div class="comments-section">
+          <h4>Comments ({{ postComments.length }})</h4>
+          <form [formGroup]="commentForm" (ngSubmit)="addComment()" class="comment-form">
+            <textarea formControlName="body" placeholder="Write a comment..." required></textarea>
+            <button type="submit" class="btn primary-btn">Post Comment</button>
+          </form>
+          <div class="comments-list">
+            <div *ngFor="let comment of postComments" class="comment-item">
+              <div class="comment-author">{{ comment.author_name }}</div>
+              <div class="comment-body">{{ comment.body }}</div>
+              <div class="comment-time">{{ comment.created_at | date:'short' }}</div>
+              <button (click)="openFlagModal('comment', comment.comment_id)" class="btn secondary-btn btn-sm">Flag</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flag / Report Modal -->
+  <div *ngIf="showFlagModal" class="modal-overlay" (click)="closeFlagModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Flag {{ flagEntityType }}</h2>
+        <button (click)="closeFlagModal()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form [formGroup]="flagForm" (ngSubmit)="submitReport()">
+          <div class="form-group">
+            <label>Reason</label>
+            <input type="text" formControlName="reason" placeholder="e.g. Inappropriate content" required>
+          </div>
+          <div class="form-group">
+            <label>Details (optional)</label>
+            <textarea formControlName="details" placeholder="Additional details"></textarea>
+          </div>
+          <button type="submit" class="btn primary-btn">Submit Report</button>
+          <button type="button" (click)="closeFlagModal()" class="btn secondary-btn">Cancel</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

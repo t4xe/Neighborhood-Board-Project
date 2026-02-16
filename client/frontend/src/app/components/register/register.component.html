@@ -1,0 +1,65 @@
+<div class="register-container">
+  <div class="card register-card">
+    <h1 class="title">Create Account</h1>
+    <p class="subtitle">Join your neighborhood community</p>
+
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+      <div class="form-group">
+        <label for="displayName">Display Name</label>
+        <input 
+          id="displayName"
+          type="text" 
+          formControlName="displayName" 
+          placeholder="Your name"
+          [class.error]="displayName?.invalid && displayName?.touched">
+        <div *ngIf="displayName?.invalid && displayName?.touched" class="error-message">
+          <span *ngIf="displayName?.errors?.['required']">Display name is required</span>
+          <span *ngIf="displayName?.errors?.['minlength']">Display name must be at least 2 characters</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email"
+          type="email" 
+          formControlName="email" 
+          placeholder="your@email.com"
+          [class.error]="email?.invalid && email?.touched">
+        <div *ngIf="email?.invalid && email?.touched" class="error-message">
+          <span *ngIf="email?.errors?.['required']">Email is required</span>
+          <span *ngIf="email?.errors?.['email']">Please enter a valid email</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input 
+          id="password"
+          type="password" 
+          formControlName="password" 
+          placeholder="Minimum 6 characters"
+          [class.error]="password?.invalid && password?.touched">
+        <div *ngIf="password?.invalid && password?.touched" class="error-message">
+          <span *ngIf="password?.errors?.['required']">Password is required</span>
+          <span *ngIf="password?.errors?.['minlength']">Password must be at least 6 characters</span>
+        </div>
+      </div>
+
+      <div *ngIf="errorMessage" class="alert alert-error">
+        {{ errorMessage }}
+      </div>
+
+      <button 
+        type="submit" 
+        class="btn primary-btn" 
+        [disabled]="isLoading">
+        {{ isLoading ? 'Creating Account...' : 'Register' }}
+      </button>
+    </form>
+
+    <div class="login-link">
+      <p>Already have an account? <a routerLink="/login">Sign In</a></p>
+    </div>
+  </div>
+</div>

@@ -1,15 +1,45 @@
-# Frontend (Angular) — teammate’s task
+# Frontend (Angular)
 
-Backend is complete and running. **Your task is to implement the full Angular frontend here.**
+Angular 21 frontend for the Neighborhood Community Board. It includes:
 
-- **API:** See `/docs/API.md` in the repo (or hit `/docs/API.md` when the server is running). Base URL: `/api`. Auth: `Authorization: Bearer <token>` after login.
-- **Stack:** Angular (TypeScript). Backend serves the built app in production (same origin).
-- **Scope (from project description):**
-  - Login; role-based UI aligned with backend (administrator, management, regular, visitor).
-  - Feed: list posts with server-side pagination, filter by category and zone, sort.
-  - Post detail: view post, comments, reactions (helpful, interested, congratulations, sold).
-  - Create/edit post (auth required); comment and react (auth required).
-  - At least one chart with business data (e.g. posts per category).
-  - Usability: responsive layout, clear error messages, guards/interceptors for auth.
+- **Login** and **Register** (reactive forms)
+- **AuthGuard** and **AdminGuard** for route protection
+- **User Dashboard:** post feed, create post, profile, comments, reactions
+- **Admin Dashboard:** user list, post list, edit/delete users, delete posts
+- Role-based redirects after login (admin → `/admin`, user → `/user-dashboard`)
 
-Create the Angular app in this folder (e.g. `ng new client` and move files here, or scaffold manually). Use proxy to `http://localhost:3000` for `/api` during development.
+## How to start and test
+
+**See the main [README](../README.md) in the project root** for:
+
+- Prerequisites and project structure
+- Installation (root, server, frontend)
+- **How to start the app** (backend + frontend, two terminals)
+- **How to test** (browser, curl, Postman)
+- Demo accounts (admin@example.com / admin123)
+- API overview and troubleshooting
+
+## Quick start (from project root)
+
+1. **Backend:** `npm run dev` (runs on http://localhost:3000)
+2. **Frontend:** `cd client/frontend && npm start` (runs on http://localhost:4200)
+3. Open **http://localhost:4200** in the browser
+
+The frontend proxies `/api` to the backend via `proxy.conf.json`. Use `npm start` (or `ng serve --proxy-config proxy.conf.json`) so the proxy is active.
+
+## Frontend structure
+
+- `src/app/app.ts` — root component (router outlet only)
+- `src/app/app.routes.ts` — routes and guards
+- `src/app/services/auth.service.ts` — login, register, logout, token, role
+- `src/app/guards/auth.guard.ts`, `admin.guard.ts` — route protection
+- `src/app/components/` — login, register, home, user-dashboard, admin-dashboard
+
+## Build for production
+
+```bash
+cd client/frontend
+npm run build
+```
+
+Output is in `dist/`. The backend can serve this from `public/` in production (same origin).

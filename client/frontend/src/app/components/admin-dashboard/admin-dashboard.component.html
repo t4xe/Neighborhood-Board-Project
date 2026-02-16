@@ -1,0 +1,254 @@
+<div class="admin-dashboard">
+  <!-- Header -->
+  <header class="dashboard-header">
+    <div>
+      <h1>Admin Dashboard</h1>
+      <p>Welcome, {{ currentUser?.display_name }} (Admin)</p>
+    </div>
+    <div class="header-actions">
+      <button (click)="logout()" class="btn secondary-btn">Logout</button>
+    </div>
+  </header>
+
+  <!-- Messages -->
+  <div *ngIf="errorMessage" class="alert alert-error">{{ errorMessage }}</div>
+  <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
+
+  <!-- Sidebar Navigation -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <h3>Navigation</h3>
+      <button (click)="view = 'users'" class="sidebar-btn" [class.active]="view === 'users'">👥 All Users</button>
+      <button (click)="view = 'posts'" class="sidebar-btn" [class.active]="view === 'posts'">📝 All Posts</button>
+      <button (click)="view = 'categories'" class="sidebar-btn" [class.active]="view === 'categories'">📁 Categories</button>
+      <button (click)="view = 'reports'" class="sidebar-btn" [class.active]="view === 'reports'">🚩 Moderation Reports</button>
+    </div>
+    <div class="sidebar-section">
+      <h3>Quick Stats</h3>
+      <div class="stat-item"><span class="stat-label">Users:</span><span class="stat-value">{{ users.length }}</span></div>
+      <div class="stat-item"><span class="stat-label">Posts:</span><span class="stat-value">{{ posts.length }}</span></div>
+      <div class="stat-item"><span class="stat-label">Reports:</span><span class="stat-value">{{ reports.length }}</span></div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- User Management Section -->
+    <div *ngIf="view === 'users'" class="section">
+      <div class="section-header">
+        <h2>User Management</h2>
+        <span class="badge">{{ users.length }} users</span>
+      </div>
+
+      <!-- User Edit Form -->
+      <div *ngIf="showUserEdit" class="card edit-form-card">
+        <h3>Edit User</h3>
+        <form [formGroup]="userEditForm" (ngSubmit)="updateUser()">
+          <div class="form-group">
+            <label>Display Name</label>
+            <input type="text" formControlName="displayName" required>
+          </div>
+          <div class="form-group">
+            <label>Roles</label>
+            <select formControlName="roles" required>
+              <option value="regular">User</option>
+              <option value="administrator">Admin</option>
+              <option value="management">Management</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select formControlName="status" required>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="deleted">Deleted</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Zone</label>
+            <input type="text" formControlName="zone" placeholder="Optional">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary-btn">Update User</button>
+            <button type="button" (click)="cancelUserEdit()" class="btn secondary-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Users List -->
+      <div class="users-list">
+        <div *ngFor="let user of users" class="card user-card">
+          <div class="user-info">
+            <div class="user-main">
+              <h4>{{ user.display_name }}</h4>
+              <span class="user-email">{{ user.email }}</span>
+            </div>
+            <div class="user-meta">
+              <span class="badge" [class.admin-badge]="user.isAdmin">
+                {{ user.isAdmin ? 'Admin' : 'User' }}
+              </span>
+              <span class="badge status-badge" [class.active]="user.status === 'active'">
+                {{ user.status }}
+              </span>
+            </div>
+          </div>
+          <div class="user-actions">
+            <button (click)="editUser(user)" class="btn secondary-btn btn-sm">Edit</button>
+            <button (click)="deleteUser(user.user_id)" class="btn danger-btn btn-sm">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post Management Section -->
+    <div *ngIf="view === 'posts'" class="section">
+      <div class="section-header">
+        <h2>Post Management</h2>
+        <span class="badge">{{ posts.length }} posts</span>
+      </div>
+      <div class="posts-list">
+        <div *ngFor="let post of posts" class="card post-card">
+          <div class="post-header">
+            <h4>{{ post.title }}</h4>
+            <span class="badge">{{ post.category_name }}</span>
+            <span class="badge status-badge" [class.inactive]="post.status === 'inactive'">{{ post.status }}</span>
+          </div>
+          <p class="post-description">{{ post.description }}</p>
+          <div class="post-meta">
+            <span>👤 {{ post.author_name }}</span>
+            <span>📍 {{ post.zone }}</span>
+            <span *ngIf="post.price">💰 ${{ post.price }}</span>
+            <span>📅 {{ post.created_at | date:'short' }}</span>
+            <span *ngIf="post.expires_at">⏱ Expires {{ post.expires_at | date:'short' }}</span>
+          </div>
+          <div class="post-actions">
+            <button (click)="viewPost(post)" class="btn secondary-btn btn-sm">View Details</button>
+            <button (click)="deletePost(post.post_id)" class="btn danger-btn btn-sm">Delete Post</button>
+          </div>
+        </div>
+      </div>
+      <div *ngIf="posts.length === 0" class="no-items"><p>No posts found.</p></div>
+    </div>
+
+    <!-- Categories Section -->
+    <div *ngIf="view === 'categories'" class="section">
+      <div class="section-header">
+        <h2>Categories</h2>
+        <button (click)="showAddCategory = !showAddCategory" class="btn primary-btn">Add Category</button>
+      </div>
+      <div *ngIf="showAddCategory" class="card">
+        <h3>New Category</h3>
+        <form [formGroup]="categoryForm" (ngSubmit)="addCategory()">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" formControlName="name" required>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" formControlName="description">
+          </div>
+          <div class="form-group">
+            <label>Rules</label>
+            <input type="text" formControlName="rules">
+          </div>
+          <button type="submit" class="btn primary-btn">Add</button>
+          <button type="button" (click)="showAddCategory = false" class="btn secondary-btn">Cancel</button>
+        </form>
+      </div>
+      <div class="users-list">
+        <div *ngFor="let cat of categories" class="card user-card">
+          <h4>{{ cat.name }}</h4>
+          <p *ngIf="cat.description" class="muted">{{ cat.description }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Moderation Reports Section -->
+    <div *ngIf="view === 'reports'" class="section">
+      <div class="section-header">
+        <h2>Moderation Reports</h2>
+        <span class="badge">{{ reports.length }} reports</span>
+      </div>
+      <div class="users-list">
+        <div *ngFor="let report of reports" class="card user-card">
+          <div class="user-info">
+            <h4>#{{ report.report_id }} – {{ report.entity_type }} #{{ report.entity_id }}</h4>
+            <p><strong>Reason:</strong> {{ report.reason }}</p>
+            <p *ngIf="report.details" class="muted">{{ report.details }}</p>
+            <span class="badge" [class.resolved]="report.status === 'resolved'">{{ report.status }}</span>
+            <span>By {{ report.reporter_name }} · {{ report.created_at | date:'short' }}</span>
+          </div>
+          <button (click)="viewReport(report.report_id)" class="btn primary-btn btn-sm">View / Act</button>
+        </div>
+      </div>
+      <div *ngIf="reports.length === 0" class="no-items"><p>No reports.</p></div>
+    </div>
+  </div>
+
+  <!-- Post Detail Modal (admin) -->
+  <div *ngIf="selectedPost" class="modal-overlay" (click)="closePostDetail()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>{{ selectedPost.title }}</h2>
+        <button (click)="closePostDetail()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>{{ selectedPost.description }}</p>
+        <div class="post-meta">
+          <span>{{ selectedPost.author_name }}</span>
+          <span>{{ selectedPost.zone }}</span>
+          <span>{{ selectedPost.status }}</span>
+        </div>
+        <h4>Comments</h4>
+        <div *ngFor="let c of selectedPostComments" class="comment-row">
+          <span>{{ c.author_name }}: {{ c.body }}</span>
+          <button (click)="deleteComment(selectedPost.post_id, c.comment_id)" class="btn danger-btn btn-sm">Delete</button>
+        </div>
+        <h4>Reactions</h4>
+        <div *ngFor="let r of selectedPostReactions" class="comment-row">
+          <span>{{ r.type }} by {{ r.author_name }}</span>
+          <button (click)="deleteReaction(selectedPost.post_id, r.reaction_id)" class="btn danger-btn btn-sm">Remove</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Detail Modal -->
+  <div *ngIf="showReportDetail && selectedReport" class="modal-overlay" (click)="closeReportDetail()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Report #{{ selectedReport.report_id }}</h2>
+        <button (click)="closeReportDetail()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p><strong>Entity:</strong> {{ selectedReport.entity_type }} #{{ selectedReport.entity_id }}</p>
+        <p><strong>Reason:</strong> {{ selectedReport.reason }}</p>
+        <p *ngIf="selectedReport.details"><strong>Details:</strong> {{ selectedReport.details }}</p>
+        <p>Status: {{ selectedReport.status }} · Reported by {{ selectedReport.reporter_name }}</p>
+        <h4>Audit trail</h4>
+        <div *ngFor="let a of selectedReport.audit" class="audit-item">
+          {{ a.action }} – {{ a.actor_name }} · {{ a.created_at | date:'short' }}
+        </div>
+        <form [formGroup]="reportStatusForm" (ngSubmit)="updateReportStatus()" class="report-form">
+          <div class="form-group">
+            <label>Status</label>
+            <select formControlName="status">
+              <option value="open">Open</option>
+              <option value="in_review">In Review</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Action / Notes</label>
+            <input type="text" formControlName="action" placeholder="e.g. Comment removed">
+          </div>
+          <div class="form-group">
+            <label>Details</label>
+            <input type="text" formControlName="details">
+          </div>
+          <button type="submit" class="btn primary-btn">Update Report</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

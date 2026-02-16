@@ -1,6 +1,7 @@
 export type UserRole = 'administrator' | 'management' | 'regular' | 'visitor';
 export type UserType = 'resident' | 'local_business';
-export type PostStatus = 'active' | 'resolved' | 'archived';
+export type PostStatus = 'active' | 'inactive' | 'resolved' | 'archived';
+export type ReportStatus = 'open' | 'in_review' | 'resolved';
 export type ReactionType = 'helpful' | 'interested' | 'congratulations' | 'sold';
 
 export interface User {
